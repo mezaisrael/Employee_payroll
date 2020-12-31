@@ -1,7 +1,12 @@
 package com.payroll;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
+import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.*;
+
+import org.springframework.hateoas.CollectionModel;
+import org.springframework.hateoas.EntityModel;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -14,17 +19,24 @@ import org.springframework.web.bind.annotation.RestController;
 class EmployeeController {
 
   private final EmployeeRepository repository;
+  private final EmployeeModelAssembler assembler;
 
-  EmployeeController(EmployeeRepository repository) {
+  EmployeeController(EmployeeRepository repository, EmployeeModelAssembler assembler) {
     this.repository = repository;
+    this.assembler = assembler;
   }
 
 
   // Aggregate root
   // tag::get-aggregate-root[]
   @GetMapping("/employees")
-  List<Employee> all() {
-    return repository.findAll();
+  CollectionModel<EntityModel<Employee>> all() {
+
+    List<EntityModel<Employee>> employees = repository.findAll().stream()
+      .map(assembler::toModel) //
+      .collect(Collectors.toList());
+
+    return CollectionModel.of(employees, linkTo(methodOn(EmployeeController.class).all()).withSelfRel());
   }
   // end::get-aggregate-root[]
 
@@ -36,13 +48,17 @@ class EmployeeController {
   // Single item
 
   @GetMapping("/employees/{id}")
-  Employee one(@PathVariable Long id) {
+  EntityModel<Employee> one(@PathVariable Long id) {
 
-    return repository.findById(id)
-      .orElseThrow(() -> new EmployeeNotFoundException(id));
+    Employee employee = repository.findById(id) //
+        .orElseThrow(() -> new EmployeeNotFoundException(id));
+
+    return assembler.toModel(employee);
   }
 
-  @PutMapping("/employees/{id}")
+
+
+@PutMapping("/employees/{id}")
   Employee replaceEmployee(@RequestBody Employee newEmployee, @PathVariable Long id) {
 
     return repository.findById(id)
